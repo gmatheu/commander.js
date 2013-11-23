@@ -41,6 +41,7 @@ function Option(flags, description) {
   this.flags = flags;
   this.required = ~flags.indexOf('<');
   this.optional = ~flags.indexOf('[');
+  this.greedy = ~flags.indexOf('*');
   this.bool = !~flags.indexOf('-no-');
   flags = flags.split(/[ ,|]+/);
   if (flags.length > 1 && !/^[[<]/.test(flags[1])) this.short = flags.shift();
@@ -521,7 +522,8 @@ Command.prototype.parseOptions = function(argv){
     , len = argv.length
     , literal
     , option
-    , arg;
+    , arg
+    , nextArg;
 
   var unknownOptions = [];
 
@@ -549,6 +551,19 @@ Command.prototype.parseOptions = function(argv){
       if (option.required) {
         arg = argv[++i];
         if (null == arg) return this.optionMissingArgument(option);
+        // option is greedy (i.e. get all args until another option is found)
+        if (option.greedy) {
+          while (nextArg = argv[++i]) {
+            if ('--' != arg && !this.optionFor(nextArg) && !(nextArg.length > 1 && '-' == nextArg[0])) {
+              // is not an option, save it and continue parsing the next value
+              arg += " " + nextArg;
+            } else {
+              // is an option, step back and let the main loop take care
+              i--;
+              break;
+            }
+          }
+        }
         this.emit(option.name(), arg);
       // optional arg
       } else if (option.optional) {
